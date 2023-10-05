@@ -29,6 +29,7 @@ class MqttHelper(val context: Context,
     private var isCheckingConnectionStatus = false
     var allowAutomaticReconnect = true
     private val debouncedReconnect = debounce(2000L) { actualReconnect() }
+    private var connectionCheckRunnable: Runnable? = null
 
 
     init {
@@ -36,9 +37,10 @@ class MqttHelper(val context: Context,
     }
 
     private fun reconnect() {
-        if (!allowAutomaticReconnect) return
+        if (!allowAutomaticReconnect || initialConnectionSuccess != true) return
         debouncedReconnect()
     }
+
     private fun actualReconnect() {
         val persistence = MemoryPersistence()
         if (client == null) {
@@ -84,7 +86,7 @@ class MqttHelper(val context: Context,
         if (isCheckingConnectionStatus) return // Return if it's already checking
 
         val checkInterval = 1000L // 1000 milliseconds = 1 second
-        handler.postDelayed(object : Runnable {
+        connectionCheckRunnable = object : Runnable {
             override fun run() {
                 val isConnected = isConnected()
                 callback.invoke(isConnected)
@@ -92,15 +94,12 @@ class MqttHelper(val context: Context,
                     Toast.makeText(context, "Disconnected. Attempting to reconnect...", Toast.LENGTH_SHORT).show()
                     reconnect()  // Attempt to reconnect if not connected
                 }
-                if (isCheckingConnectionStatus) {  // Check again if it should continue checking
-                    handler.postDelayed(this, checkInterval)
-                }
+                handler.postDelayed(this, checkInterval)
             }
-        }, checkInterval)
-
+        }
+        handler.post(connectionCheckRunnable!!)
         isCheckingConnectionStatus = true  // Set the flag to true
     }
-
     fun isConnected(): Boolean {
         return client?.isConnected == true
     }
@@ -113,10 +112,11 @@ class MqttHelper(val context: Context,
         return sourceId
     }
     fun stopCheckingConnectionStatus() {
+        connectionCheckRunnable?.let { runnable ->
+            handler.removeCallbacks(runnable)
+        }
         isCheckingConnectionStatus = false
     }
-
-        //Publish JSON "signal" from app
     fun sendQRMessage(qrMessage: String) {
         val currentTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ENGLISH).format(Date())
         val jsonMessage = JSONObject()

@@ -142,11 +142,20 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
     private fun clearPolylines() {
-        for (polyline in toolPolylines.values) {
-            polyline.remove()
-            Toast.makeText(this@MainActivity,"Paths Cleared",Toast.LENGTH_SHORT).show()
+        for ((key, polyline) in toolPolylines) {
+            // Get the last point of each polyline
+            val lastPoint = polyline.points.last()
+
+            // Clear the current path of this tool
+            toolPaths[key]?.clear()
+
+            // Start a new path with only the last point
+            toolPaths[key]?.add(lastPoint)
+
+            // Update the polyline on the map
+            polyline.points = listOf(lastPoint)
         }
-        toolPolylines.clear()
+        Toast.makeText(this@MainActivity,"Paths Cleared",Toast.LENGTH_SHORT).show()
     }
     private fun showConnectDialog() {
         val builder = AlertDialog.Builder(this)
@@ -175,6 +184,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 mqttHelper = MqttHelper(this@MainActivity, "tcp://$brokerIp:1883", sourceId, sourceId)
 
                 mqttHelper?.let {
+                    it.stopCheckingConnectionStatus()  // Ensure any previous task is stopped
                     if (it.initialConnectionSuccess == true) {
                         it.startCheckingConnectionStatus { isConnected ->
                             Log.d("MQTT_STATUS", "Connected: $isConnected")
