@@ -8,6 +8,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.Switch
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import androidx.appcompat.app.AppCompatActivity
@@ -26,7 +27,9 @@ import org.eclipse.paho.client.mqttv3.MqttCallback
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.json.JSONObject
 import android.graphics.Color
+import android.net.Uri
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.widget.ImageViewCompat
 
@@ -238,12 +241,29 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun showInfoDialog() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Credits")
-        builder.setMessage("ΑΛΦΑ ΡΕ ΓΑΒΓΑΒ")
 
-        builder.setPositiveButton("OK") { dialog, _ ->
-            dialog.dismiss()
+        val inflater = this.layoutInflater
+        val dialogView = inflater.inflate(R.layout.chat_dialog_layout, null)
+        builder.setView(dialogView)
+
+        val emailTextView: TextView = dialogView.findViewById(R.id.tvEmail)
+        emailTextView.paint.isUnderlineText = true
+        emailTextView.setOnClickListener {
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:michmall@iti.gr")
+                putExtra(Intent.EXTRA_SUBJECT, "Subject of your email")
+                putExtra(Intent.EXTRA_TEXT, "Body of your email")
+            }
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(intent)
+            }
         }
-        builder.show()
+        builder.setPositiveButton("OK") { _, _ ->
+            // Handle positive button click here
+        }
+
+        val alertDialog = builder.create()
+        alertDialog.show()
     }
     private fun focusOnMostRecentMarker() {
         mostRecentLatLng?.let {

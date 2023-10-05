@@ -1,0 +1,42 @@
+<!-- res/layout/chat_dialog_layout.xml -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvLine1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Developed from CERTH, for the RESCUER EU_H2020 Project" />
+
+    <TextView
+        android:id="@+id/tvLine2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Developer: Michalis 'Mike' Mallis" />
+
+    <TextView
+        android:id="@+id/tvLine3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ITI - CERTH, VCL3D Lab" />
+
+
+
+    <TextView
+        android:id="@+id/tvLine4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Contact us: " />
+
+    <TextView
+        android:id="@+id/tvEmail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="michmall@iti.gr"
+        android:textColor="@android:color/holo_blue_dark" />
+
+</LinearLayout>
