@@ -156,6 +156,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             polyline.points = listOf(lastPoint)
         }
         Toast.makeText(this@MainActivity,"Paths Cleared",Toast.LENGTH_SHORT).show()
+
     }
     private fun showConnectDialog() {
         val builder = AlertDialog.Builder(this)
@@ -184,7 +185,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 mqttHelper = MqttHelper(this@MainActivity, "tcp://$brokerIp:1883", sourceId, sourceId)
 
                 mqttHelper?.let {
-                    it.stopCheckingConnectionStatus()  // Ensure any previous task is stopped
                     if (it.initialConnectionSuccess == true) {
                         it.startCheckingConnectionStatus { isConnected ->
                             Log.d("MQTT_STATUS", "Connected: $isConnected")
