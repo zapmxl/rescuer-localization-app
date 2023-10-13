@@ -21,6 +21,9 @@ class MqttHelper(val context: Context,
 
     companion object {
         const val QOS_LEVEL = 1
+        private const val MAX_RECONNECT_ATTEMPTS = 10
+        private const val INITIAL_RECONNECT_DELAY = 5000L
+        private const val MAX_RECONNECT_DELAY = 120000L
     }
     private var client: MqttClient? = null // Making it nullable
     private val handler = Handler(Looper.getMainLooper())
@@ -29,18 +32,24 @@ class MqttHelper(val context: Context,
     private var isCheckingConnectionStatus = false
     var allowAutomaticReconnect = true
     private val debouncedReconnect = debounce(2000L) { actualReconnect() }
-    private var connectionCheckRunnable: Runnable? = null
-
+    private var reconnectAttempts = 0
+    private var reconnectDelay = INITIAL_RECONNECT_DELAY
 
     init {
         reconnect()
     }
 
     private fun reconnect() {
-        if (!allowAutomaticReconnect || initialConnectionSuccess != true) return
-        debouncedReconnect()
-    }
+        if (!allowAutomaticReconnect) return
 
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            handler.postDelayed({
+                actualReconnect()
+            }, reconnectDelay)
+        } else {
+            Toast.makeText(context, "Max reconnection attempts reached. Please check your connection.", Toast.LENGTH_SHORT).show()
+        }
+    }
     private fun actualReconnect() {
         val persistence = MemoryPersistence()
         if (client == null) {
@@ -57,17 +66,26 @@ class MqttHelper(val context: Context,
             if (wasPreviouslyConnected) {
                 Toast.makeText(context, "Reconnection successful", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "Successfully Connected to Broker", Toast.LENGTH_SHORT)
-                    .show()
+                Toast.makeText(context, "Successfully Connected to Broker", Toast.LENGTH_SHORT).show()
                 wasPreviouslyConnected = true
             }
             initialConnectionSuccess = true
+
+            // Reset attempts and delay on successful connection
+            reconnectAttempts = 0
+            reconnectDelay = INITIAL_RECONNECT_DELAY
+
         } catch (e: MqttException) {
             e.printStackTrace()
             Toast.makeText(context, "Failed to Connect to Broker", Toast.LENGTH_SHORT).show()
             if (initialConnectionSuccess == null) {
                 initialConnectionSuccess = false
             }
+
+            // Increment the reconnect attempts and exponentially increase the delay for the next reconnection attempt
+            reconnectAttempts++
+            reconnectDelay = kotlin.math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY)
+            reconnect()  // Schedule the next reconnection attempt
         }
     }
     private fun debounce(windowDuration: Long, action: () -> Unit): () -> Unit {
@@ -86,7 +104,7 @@ class MqttHelper(val context: Context,
         if (isCheckingConnectionStatus) return // Return if it's already checking
 
         val checkInterval = 1000L // 1000 milliseconds = 1 second
-        connectionCheckRunnable = object : Runnable {
+        handler.postDelayed(object : Runnable {
             override fun run() {
                 val isConnected = isConnected()
                 callback.invoke(isConnected)
@@ -94,12 +112,15 @@ class MqttHelper(val context: Context,
                     Toast.makeText(context, "Disconnected. Attempting to reconnect...", Toast.LENGTH_SHORT).show()
                     reconnect()  // Attempt to reconnect if not connected
                 }
-                handler.postDelayed(this, checkInterval)
+                if (isCheckingConnectionStatus) {  // Check again if it should continue checking
+                    handler.postDelayed(this, checkInterval)
+                }
             }
-        }
-        handler.post(connectionCheckRunnable!!)
+        }, checkInterval)
+
         isCheckingConnectionStatus = true  // Set the flag to true
     }
+
     fun isConnected(): Boolean {
         return client?.isConnected == true
     }
@@ -112,11 +133,10 @@ class MqttHelper(val context: Context,
         return sourceId
     }
     fun stopCheckingConnectionStatus() {
-        connectionCheckRunnable?.let { runnable ->
-            handler.removeCallbacks(runnable)
-        }
         isCheckingConnectionStatus = false
     }
+
+        //Publish JSON "signal" from app
     fun sendQRMessage(qrMessage: String) {
         val currentTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ENGLISH).format(Date())
         val jsonMessage = JSONObject()

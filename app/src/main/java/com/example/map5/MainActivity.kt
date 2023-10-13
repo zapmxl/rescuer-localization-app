@@ -388,8 +388,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         mMap.mapType = GoogleMap.MAP_TYPE_HYBRID // Initial map type
-        val introMark = LatLng(40.5577141452453, 23.021975184406102)
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(introMark, 18f))
+        val introMark = LatLng(45.195836810455404, 6.667267626055969)
+        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(introMark, 16.5f))
         googleMap.addMarker(MarkerOptions()
             .position(introMark)
             .title("Welcome")
