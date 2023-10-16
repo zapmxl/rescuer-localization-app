@@ -77,13 +77,13 @@
 
     <Button
         android:id="@+id/focusLastMarkerButton"
-        android:layout_width="169dp"
+        android:layout_width="170dp"
         android:layout_height="40dp"
         android:layout_marginEnd="20dp"
-        android:layout_marginBottom="640dp"
+        android:layout_marginTop="20dp"
         android:backgroundTint="#A82196F3"
         android:text="Focus on last topic"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         tools:layout_editor_absoluteY="17dp" />
 
@@ -92,12 +92,12 @@
         android:layout_width="85dp"
         android:layout_height="40dp"
         android:layout_marginEnd="20dp"
-        android:layout_marginBottom="600dp"
+        android:layout_marginTop="60dp"
         android:backgroundTint="#39F3DE21"
         android:text="Clear"
         android:textAlignment="center"
         android:textColor="#FF0000"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <ImageView
@@ -116,10 +116,10 @@
         android:layout_width="75dp"
         android:layout_height="50dp"
         android:layout_marginStart="15dp"
-        android:layout_marginBottom="600dp"
+        android:layout_marginTop="50dp"
         android:backgroundTint="#A803A9F4"
         android:drawableLeft="@android:drawable/ic_dialog_map"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
     <Button
