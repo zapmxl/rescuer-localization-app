@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var mostRecentLatLng: LatLng? = null
     private lateinit var mMap: GoogleMap
+    private lateinit var tileCacheManager: TileCacheManager
     private var mqttHelper: MqttHelper? = null
     private val toolPaths: MutableMap<String, MutableList<LatLng>> = mutableMapOf()
     private val toolMarkers: MutableMap<String, Marker?> = mutableMapOf()
@@ -50,6 +51,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         sharedPreferences = getSharedPreferences("map5_preferences", Context.MODE_PRIVATE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)  // Keep screen on
+        tileCacheManager = TileCacheManager(this)
 
         val mapFragment = supportFragmentManager
             .findFragmentById(R.id.map) as SupportMapFragment
@@ -403,9 +405,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             showMapTypeSelectorDialog()
         }
     }
-
+    override fun onPause() {
+        super.onPause()
+        tileCacheManager.persistCacheToData()
+    }
+    override fun onStop() {
+        super.onStop()
+        tileCacheManager.persistCacheToData()
+    }
     override fun onDestroy() {
         super.onDestroy()
+        tileCacheManager.persistCacheToData()
         mqttHelper?.disconnect()
         mqttHelper?.stopCheckingConnectionStatus()  // Stop checking connection status
     }

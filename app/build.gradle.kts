@@ -51,5 +51,6 @@ dependencies {
     implementation ("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation ("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
     implementation ("com.android.support:multidex:1.0.3")
+    implementation ("com.squareup.okhttp3:okhttp:4.9.1")
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.0")
 }

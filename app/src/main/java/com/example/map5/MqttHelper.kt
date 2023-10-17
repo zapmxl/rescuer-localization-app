@@ -41,14 +41,7 @@ class MqttHelper(val context: Context,
 
     private fun reconnect() {
         if (!allowAutomaticReconnect) return
-
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            handler.postDelayed({
-                actualReconnect()
-            }, reconnectDelay)
-        } else {
-            Toast.makeText(context, "Max reconnection attempts reached. Please check your connection.", Toast.LENGTH_SHORT).show()
-        }
+        debouncedReconnect()
     }
     private fun actualReconnect() {
         val persistence = MemoryPersistence()
@@ -66,26 +59,17 @@ class MqttHelper(val context: Context,
             if (wasPreviouslyConnected) {
                 Toast.makeText(context, "Reconnection successful", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, "Successfully Connected to Broker", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Successfully Connected to Broker", Toast.LENGTH_SHORT)
+                    .show()
                 wasPreviouslyConnected = true
             }
             initialConnectionSuccess = true
-
-            // Reset attempts and delay on successful connection
-            reconnectAttempts = 0
-            reconnectDelay = INITIAL_RECONNECT_DELAY
-
         } catch (e: MqttException) {
             e.printStackTrace()
             Toast.makeText(context, "Failed to Connect to Broker", Toast.LENGTH_SHORT).show()
             if (initialConnectionSuccess == null) {
                 initialConnectionSuccess = false
             }
-
-            // Increment the reconnect attempts and exponentially increase the delay for the next reconnection attempt
-            reconnectAttempts++
-            reconnectDelay = kotlin.math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY)
-            reconnect()  // Schedule the next reconnection attempt
         }
     }
     private fun debounce(windowDuration: Long, action: () -> Unit): () -> Unit {
@@ -136,7 +120,7 @@ class MqttHelper(val context: Context,
         isCheckingConnectionStatus = false
     }
 
-        //Publish JSON "signal" from app
+    //Publish JSON "signal" from app
     fun sendQRMessage(qrMessage: String) {
         val currentTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ENGLISH).format(Date())
         val jsonMessage = JSONObject()
