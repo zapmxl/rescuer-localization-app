@@ -75,6 +75,18 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <Switch
+        android:id="@+id/dso_switch"
+        android:layout_width="120dp"
+        android:layout_height="20dp"
+        android:layout_marginRight="10dp"
+        android:layout_marginBottom="200dp"
+        android:checked="false"
+        android:text="DSO Mode"
+        android:thumbTint="#A8FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <Button
         android:id="@+id/focusLastMarkerButton"
         android:layout_width="170dp"

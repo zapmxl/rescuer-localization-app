@@ -28,10 +28,13 @@ import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.json.JSONObject
 import android.graphics.Color
 import android.net.Uri
+import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.widget.ImageViewCompat
+import java.text.SimpleDateFormat
+import java.util.*
 
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -44,6 +47,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private val toolMarkers: MutableMap<String, Marker?> = mutableMapOf()
     private val toolPolylines: MutableMap<String, Polyline> = mutableMapOf()
     private lateinit var sharedPreferences: SharedPreferences
+    data class MarkerInfo(val sourceId: String, val toolData: JSONObject)
+    private var currentSelectedMarker: Marker? = null
+    private var currentSelectedTopic: String? = null
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +66,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         val connectButton: Button = findViewById(R.id.button)
 
+        val dsoSwitch: Switch = findViewById(R.id.dso_switch)
         val visualSwitch: Switch = findViewById(R.id.switch1)
         val inertioSwitch: Switch = findViewById(R.id.switch2)
         val galileoSwitch: Switch = findViewById(R.id.switch3)
@@ -83,6 +91,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             showConnectDialog()
         }
 
+        dsoSwitch.setOnCheckedChangeListener { _, isChecked ->
+            toggleDsoToolVisibility(isChecked)
+        }
         visualSwitch.setOnCheckedChangeListener { _, isChecked ->
             Log.d("SwitchToggle", "visualSwitch toggled: $isChecked")
             toolMarkers["fromtool-loc-self"]?.isVisible = isChecked
@@ -179,12 +190,14 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             val connectionIndicator: ImageView = findViewById(R.id.connectionIndicator)
 
             if (brokerIp.isNotEmpty() && sourceId.isNotEmpty()) {
+                val timestamp = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).format(Date())
+                val clientId = "Client_$timestamp"
                 with(sharedPreferences.edit()) {
                     putString("brokerIp", brokerIp)
                     putString("sourceId", sourceId)
                     apply()
                 }
-                mqttHelper = MqttHelper(this@MainActivity, "tcp://$brokerIp:1883", sourceId, sourceId)
+                mqttHelper = MqttHelper(this@MainActivity, "tcp://$brokerIp:1883", clientId, sourceId)
 
                 mqttHelper?.let {
                     if (it.initialConnectionSuccess == true) {
@@ -200,6 +213,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 mqttHelper?.subscribe("fromtool-loc-ibl")
                 mqttHelper?.subscribe("fromtool-loc-glt")
                 mqttHelper?.subscribe("fromtool-loc-fusion")
+                mqttHelper?.subscribe("fromdso-loc-self")
+                mqttHelper?.subscribe("fromdso-loc-ibl")
+                mqttHelper?.subscribe("fromdso-loc-glt")
+                mqttHelper?.subscribe("fromdso-loc-fusion")
 
                 mqttHelper?.setCallback(object : MqttCallback {
                     override fun connectionLost(cause: Throwable?) {
@@ -295,6 +312,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         val lat = toolData.getDouble("latitude")
         val lon = toolData.getDouble("longitude")
+        val heading = toolData.getDouble("heading")
+        val altitude = toolData.getDouble("altitude")
+        val mounting = toolData.getString("mounting")
+        val speed = toolData.getDouble("speed")
+        val distance = toolData.getDouble("distance")
         val latLng = LatLng(lat, lon)
 
         mostRecentLatLng = latLng  // Save the most recent LatLng
@@ -305,6 +327,16 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         runOnUiThread {
             toolMarkers[topic]?.remove()
 
+            val markerInfo = StringBuilder()
+            markerInfo.append("Source ID: ").append(jsonObject.optString("sourceID")).append("\n")
+            markerInfo.append("Latitude: ").append(lat).append("\n")
+            markerInfo.append("Longitude: ").append(lon).append("\n")
+            markerInfo.append("Heading: ").append(heading).append("\n")
+            markerInfo.append("Altitude: ").append(altitude).append("\n")
+            markerInfo.append("Mounting: ").append(mounting).append("\n")
+            markerInfo.append("Speed: ").append(speed).append("\n")
+            markerInfo.append("Distance: ").append(distance)
+
             // Get color for the topic
             val color = getColorByTopic(topic)
             val sourceId = sharedPreferences.getString("sourceId", "")
@@ -314,22 +346,25 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             val markerOptions = MarkerOptions()
                 .position(latLng)
                 .title(markerTitle)
-                .icon(BitmapDescriptorFactory.defaultMarker(
-                    when (color) {
-                        Color.BLUE -> BitmapDescriptorFactory.HUE_BLUE
-                        Color.GREEN -> BitmapDescriptorFactory.HUE_GREEN
-                        Color.RED -> BitmapDescriptorFactory.HUE_RED
-                        Color.YELLOW -> BitmapDescriptorFactory.HUE_YELLOW
-                        else -> BitmapDescriptorFactory.HUE_VIOLET
-                    }
-                ))
+                .snippet(markerInfo.toString())
+                .icon(
+                    BitmapDescriptorFactory.defaultMarker(
+                        when (color) {
+                            Color.BLUE -> BitmapDescriptorFactory.HUE_BLUE
+                            Color.GREEN -> BitmapDescriptorFactory.HUE_GREEN
+                            Color.RED -> BitmapDescriptorFactory.HUE_RED
+                            Color.YELLOW -> BitmapDescriptorFactory.HUE_YELLOW
+                            else -> BitmapDescriptorFactory.HUE_VIOLET
+                        }
+                    )
+                )
 
             // Get switch ID based on the topic
             val switchId = when (topic) {
-                "fromtool-loc-self" -> R.id.switch1
-                "fromtool-loc-ibl" -> R.id.switch2
-                "fromtool-loc-glt" -> R.id.switch3
-                "fromtool-loc-fusion" -> R.id.switch4
+                "fromtool-loc-self", "fromdso-loc-self" -> R.id.switch1
+                "fromtool-loc-ibl", "fromdso-loc-ibl" -> R.id.switch2
+                "fromtool-loc-glt", "fromdso-loc-glt" -> R.id.switch3
+                "fromtool-loc-fusion", "fromdso-loc-fusion" -> R.id.switch4
                 else -> null
             }
 
@@ -359,6 +394,37 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
+    private fun toggleDsoToolVisibility(isDsoSwitchOn: Boolean) {
+        val fromDsoPrefix = "fromdso"
+        val fromToolPrefix = "fromtool"
+
+        toolMarkers.forEach { (topic, marker) ->
+            marker?.isVisible = if (isDsoSwitchOn) {
+                topic.startsWith(fromDsoPrefix) && getSwitchStateByTopic(topic)
+            } else {
+                topic.startsWith(fromToolPrefix) && getSwitchStateByTopic(topic)
+            }
+        }
+
+        toolPolylines.forEach { (topic, polyline) ->
+            polyline.isVisible = if (isDsoSwitchOn) {
+                topic.startsWith(fromDsoPrefix) && getSwitchStateByTopic(topic)
+            } else {
+                topic.startsWith(fromToolPrefix) && getSwitchStateByTopic(topic)
+            }
+        }
+    }
+
+    private fun getSwitchStateByTopic(topic: String): Boolean {
+        val switchId = when (topic) {
+            "fromtool-loc-self", "fromdso-loc-self" -> R.id.switch1
+            "fromtool-loc-ibl", "fromdso-loc-ibl" -> R.id.switch2
+            "fromtool-loc-glt", "fromdso-loc-glt" -> R.id.switch3
+            "fromtool-loc-fusion", "fromdso-loc-fusion" -> R.id.switch4
+            else -> null
+        }
+        return switchId?.let { findViewById<Switch>(it).isChecked } ?: false
+    }
     private fun showMapTypeSelectorDialog() {
         val mapTypeIds = arrayOf(
             GoogleMap.MAP_TYPE_NORMAL,
@@ -398,14 +464,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
         )
 
-
         val mapTypeButton: Button = findViewById(R.id.mapTypeButton)
-
         mapTypeButton.setOnClickListener {
             showMapTypeSelectorDialog()
         }
-    }
-    override fun onPause() {
+    }    override fun onPause() {
         super.onPause()
         tileCacheManager.persistCacheToData()
     }
