@@ -29,6 +29,8 @@ import org.json.JSONObject
 import android.graphics.Color
 import android.net.Uri
 import android.view.View
+import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -37,7 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 
-class MainActivity : AppCompatActivity(), OnMapReadyCallback {
+class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerClickListener {
 
     private var mostRecentLatLng: LatLng? = null
     private lateinit var mMap: GoogleMap
@@ -47,10 +49,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private val toolMarkers: MutableMap<String, Marker?> = mutableMapOf()
     private val toolPolylines: MutableMap<String, Polyline> = mutableMapOf()
     private lateinit var sharedPreferences: SharedPreferences
-    data class MarkerInfo(val sourceId: String, val toolData: JSONObject)
-    private var currentSelectedMarker: Marker? = null
-    private var currentSelectedTopic: String? = null
-
+    private lateinit var customInfoPanel: FrameLayout
+    private lateinit var infoContent: TextView
+    private lateinit var closeButton: ImageButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,13 +67,19 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         val connectButton: Button = findViewById(R.id.button)
 
-        val dsoSwitch: Switch = findViewById(R.id.dso_switch)
         val visualSwitch: Switch = findViewById(R.id.switch1)
         val inertioSwitch: Switch = findViewById(R.id.switch2)
         val galileoSwitch: Switch = findViewById(R.id.switch3)
         val fusionSwitch: Switch = findViewById(R.id.switch4)
 
         val focusLastMarkerButton: Button = findViewById(R.id.focusLastMarkerButton)
+
+        customInfoPanel = findViewById(R.id.custom_info_panel)
+        infoContent = findViewById(R.id.info_content)
+        closeButton = findViewById(R.id.close_info_panel)
+        closeButton.setOnClickListener {
+            customInfoPanel.visibility = View.GONE
+        }
 
         focusLastMarkerButton.setOnClickListener {
             focusOnMostRecentMarker()
@@ -91,9 +98,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             showConnectDialog()
         }
 
-        dsoSwitch.setOnCheckedChangeListener { _, isChecked ->
-            toggleDsoToolVisibility(isChecked)
-        }
         visualSwitch.setOnCheckedChangeListener { _, isChecked ->
             Log.d("SwitchToggle", "visualSwitch toggled: $isChecked")
             toolMarkers["fromtool-loc-self"]?.isVisible = isChecked
@@ -213,10 +217,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 mqttHelper?.subscribe("fromtool-loc-ibl")
                 mqttHelper?.subscribe("fromtool-loc-glt")
                 mqttHelper?.subscribe("fromtool-loc-fusion")
-                mqttHelper?.subscribe("fromdso-loc-self")
-                mqttHelper?.subscribe("fromdso-loc-ibl")
-                mqttHelper?.subscribe("fromdso-loc-glt")
-                mqttHelper?.subscribe("fromdso-loc-fusion")
 
                 mqttHelper?.setCallback(object : MqttCallback {
                     override fun connectionLost(cause: Throwable?) {
@@ -312,12 +312,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         val lat = toolData.getDouble("latitude")
         val lon = toolData.getDouble("longitude")
-        val heading = toolData.getDouble("heading")
-        val altitude = toolData.getDouble("altitude")
-        val mounting = toolData.getString("mounting")
-        val speed = toolData.getDouble("speed")
-        val distance = toolData.getDouble("distance")
         val latLng = LatLng(lat, lon)
+        val heading = toolData.optDouble("heading", 0.0)
+        val altitude = toolData.optDouble("altitude", 0.0)
+        val speed = toolData.optDouble("speed", 0.0)  // This field might not be present in all JSON structures
+        val distance = toolData.optDouble("distance", 0.0)  // This field might not be present in all JSON structures
+
+        // Prepare the snippet string
+        val snippet = "Lat: $lat, Lon: $lon\nHeading: $heading, Altitude: $altitude\nSpeed: $speed, Distance: $distance"
+
 
         mostRecentLatLng = latLng  // Save the most recent LatLng
 
@@ -326,16 +329,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         runOnUiThread {
             toolMarkers[topic]?.remove()
-
-            val markerInfo = StringBuilder()
-            markerInfo.append("Source ID: ").append(jsonObject.optString("sourceID")).append("\n")
-            markerInfo.append("Latitude: ").append(lat).append("\n")
-            markerInfo.append("Longitude: ").append(lon).append("\n")
-            markerInfo.append("Heading: ").append(heading).append("\n")
-            markerInfo.append("Altitude: ").append(altitude).append("\n")
-            markerInfo.append("Mounting: ").append(mounting).append("\n")
-            markerInfo.append("Speed: ").append(speed).append("\n")
-            markerInfo.append("Distance: ").append(distance)
 
             // Get color for the topic
             val color = getColorByTopic(topic)
@@ -346,25 +339,23 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             val markerOptions = MarkerOptions()
                 .position(latLng)
                 .title(markerTitle)
-                .snippet(markerInfo.toString())
-                .icon(
-                    BitmapDescriptorFactory.defaultMarker(
-                        when (color) {
-                            Color.BLUE -> BitmapDescriptorFactory.HUE_BLUE
-                            Color.GREEN -> BitmapDescriptorFactory.HUE_GREEN
-                            Color.RED -> BitmapDescriptorFactory.HUE_RED
-                            Color.YELLOW -> BitmapDescriptorFactory.HUE_YELLOW
-                            else -> BitmapDescriptorFactory.HUE_VIOLET
-                        }
-                    )
-                )
+                .snippet(snippet)
+                .icon(BitmapDescriptorFactory.defaultMarker(
+                    when (color) {
+                        Color.BLUE -> BitmapDescriptorFactory.HUE_BLUE
+                        Color.GREEN -> BitmapDescriptorFactory.HUE_GREEN
+                        Color.RED -> BitmapDescriptorFactory.HUE_RED
+                        Color.YELLOW -> BitmapDescriptorFactory.HUE_YELLOW
+                        else -> BitmapDescriptorFactory.HUE_VIOLET
+                    }
+                ))
 
             // Get switch ID based on the topic
             val switchId = when (topic) {
-                "fromtool-loc-self", "fromdso-loc-self" -> R.id.switch1
-                "fromtool-loc-ibl", "fromdso-loc-ibl" -> R.id.switch2
-                "fromtool-loc-glt", "fromdso-loc-glt" -> R.id.switch3
-                "fromtool-loc-fusion", "fromdso-loc-fusion" -> R.id.switch4
+                "fromtool-loc-self" -> R.id.switch1
+                "fromtool-loc-ibl" -> R.id.switch2
+                "fromtool-loc-glt" -> R.id.switch3
+                "fromtool-loc-fusion" -> R.id.switch4
                 else -> null
             }
 
@@ -394,37 +385,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    private fun toggleDsoToolVisibility(isDsoSwitchOn: Boolean) {
-        val fromDsoPrefix = "fromdso"
-        val fromToolPrefix = "fromtool"
-
-        toolMarkers.forEach { (topic, marker) ->
-            marker?.isVisible = if (isDsoSwitchOn) {
-                topic.startsWith(fromDsoPrefix) && getSwitchStateByTopic(topic)
-            } else {
-                topic.startsWith(fromToolPrefix) && getSwitchStateByTopic(topic)
-            }
-        }
-
-        toolPolylines.forEach { (topic, polyline) ->
-            polyline.isVisible = if (isDsoSwitchOn) {
-                topic.startsWith(fromDsoPrefix) && getSwitchStateByTopic(topic)
-            } else {
-                topic.startsWith(fromToolPrefix) && getSwitchStateByTopic(topic)
-            }
-        }
-    }
-
-    private fun getSwitchStateByTopic(topic: String): Boolean {
-        val switchId = when (topic) {
-            "fromtool-loc-self", "fromdso-loc-self" -> R.id.switch1
-            "fromtool-loc-ibl", "fromdso-loc-ibl" -> R.id.switch2
-            "fromtool-loc-glt", "fromdso-loc-glt" -> R.id.switch3
-            "fromtool-loc-fusion", "fromdso-loc-fusion" -> R.id.switch4
-            else -> null
-        }
-        return switchId?.let { findViewById<Switch>(it).isChecked } ?: false
-    }
     private fun showMapTypeSelectorDialog() {
         val mapTypeIds = arrayOf(
             GoogleMap.MAP_TYPE_NORMAL,
@@ -455,6 +415,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
+        mMap.setInfoWindowAdapter(CustomInfoWindowAdapter(this))
+        mMap.setOnMarkerClickListener(this)
+
         mMap.mapType = GoogleMap.MAP_TYPE_HYBRID // Initial map type
         val introMark = LatLng(45.195836810455404, 6.667267626055969)
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(introMark, 16.5f))
@@ -464,11 +427,21 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
         )
 
+
         val mapTypeButton: Button = findViewById(R.id.mapTypeButton)
+
         mapTypeButton.setOnClickListener {
             showMapTypeSelectorDialog()
         }
-    }    override fun onPause() {
+    }
+    override fun onMarkerClick(marker: Marker): Boolean {
+        // Update info content
+        infoContent.text = "Information about the marker"
+        // Show the custom info panel
+        customInfoPanel.visibility = View.VISIBLE
+        return true
+    }
+    override fun onPause() {
         super.onPause()
         tileCacheManager.persistCacheToData()
     }

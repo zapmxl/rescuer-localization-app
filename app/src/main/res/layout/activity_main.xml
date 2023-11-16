@@ -157,4 +157,32 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
+    <FrameLayout
+        android:id="@+id/custom_info_panel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:background="@android:color/white"
+        android:elevation="4dp"
+        android:padding="10dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <TextView
+            android:id="@+id/info_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Info Text"
+            android:layout_gravity="center"/>
+
+        <ImageButton
+            android:id="@+id/close_info_panel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_gravity="top|end"/>
+
+    </FrameLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
