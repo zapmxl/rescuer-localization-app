@@ -134,6 +134,24 @@ class MqttHelper(val context: Context,
 
         publish("fromtool-android-app", jsonMessage.toString(), QOS_LEVEL)
     }
+
+    fun sendQLocMessage(qrMessage: String) {
+        val currentTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ENGLISH).format(Date())
+        val jsonMessage = JSONObject()
+
+        jsonMessage.put("toolID", "ANDROID-APP")
+        jsonMessage.put("sourceID", sourceId)
+        jsonMessage.put("broadcast", false)
+        jsonMessage.put("startTS", currentTime)
+        jsonMessage.put("Latitude", qrMessage)
+        jsonMessage.put("Longitude", qrMessage)
+        jsonMessage.put("Altitude", qrMessage)
+
+
+
+        publish("fromtool-android-app", jsonMessage.toString(), QOS_LEVEL)
+    }
+
     fun publish(topic: String, message: String, QOS_LEVEL: Int = 1 ) {
         try {
             val mqttMessage = MqttMessage(message.toByteArray())
