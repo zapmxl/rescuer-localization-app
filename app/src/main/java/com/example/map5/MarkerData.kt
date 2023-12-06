@@ -12,5 +12,6 @@ package com.example.map5
         val distance: Double?,
         val quality: Int?,
         val qualityHeading: Int?,
-        val outdoor: Boolean?
+        val outdoor: Boolean?,
+        val topic: String
     )

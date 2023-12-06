@@ -127,7 +127,7 @@
 
     <Button
         android:id="@+id/toggleButton"
-        android:layout_width="97dp"
+        android:layout_width="100dp"
         android:layout_height="55dp"
         android:layout_marginStart="15dp"
         android:layout_marginTop="45dp"
@@ -206,6 +206,7 @@
         android:layout_height="wrap_content"
         android:visibility="gone"
         android:background="@android:color/white"
+        android:textColor="#000000"
         android:elevation="4dp"
         android:padding="10dp"
         app:layout_constraintStart_toStartOf="parent"

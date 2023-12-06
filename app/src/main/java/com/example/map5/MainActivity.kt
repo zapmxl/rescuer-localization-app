@@ -39,15 +39,17 @@ import java.text.SimpleDateFormat
 import java.util.*
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import com.google.android.gms.maps.model.BitmapDescriptor
 
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerClickListener {
 
-    private var mostRecentLatLng: LatLng? = null
     private lateinit var mMap: GoogleMap
-    private lateinit var tileCacheManager: TileCacheManager
     private var mqttHelper: MqttHelper? = null
     private val toolPaths: MutableMap<String, MutableList<LatLng>> = mutableMapOf()
     private val toolMarkers: MutableMap<String, Marker?> = mutableMapOf()
@@ -57,7 +59,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
     private lateinit var infoContent: TextView
     private lateinit var closeButton: ImageButton
     private val markerDataMap = mutableMapOf<Marker, MarkerData>()
-    private val bitmapCache = mutableMapOf<String, BitmapDescriptor>()
+    private var areButtonsVisible = true
+    private var selectedMarker: Marker? = null
+    private var isDebugInfoVisible = false
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,12 +70,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
 
         sharedPreferences = getSharedPreferences("map5_preferences", Context.MODE_PRIVATE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)  // Keep screen on
-        tileCacheManager = TileCacheManager(this)
 
         val mapFragment = supportFragmentManager
             .findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this) // Initialize Google Map
 
+        val toggleButton: Button = findViewById(R.id.toggleButton)
+        toggleButton.setOnClickListener {
+            toggleButtonsVisibility()
+        }
         val connectButton: Button = findViewById(R.id.button)
 
         val visualSwitch: Switch = findViewById(R.id.switch1)
@@ -106,31 +114,31 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
 
         visualSwitch.setOnCheckedChangeListener { _, isChecked ->
             Log.d("SwitchToggle", "visualSwitch toggled: $isChecked")
-            toolMarkers["fromtool-loc-self"]?.isVisible = isChecked
-            toolPolylines["fromtool-loc-self"]?.isVisible = isChecked
+            toolMarkers["fromdso-loc-self"]?.isVisible = isChecked
+            toolPolylines["fromdso-loc-self"]?.isVisible = isChecked
         }
 
         inertioSwitch.setOnCheckedChangeListener { _, isChecked ->
             Log.d("SwitchToggle", "InertioSwitch toggled: $isChecked")
-            toolMarkers["fromtool-loc-ibl"]?.isVisible = isChecked
-            toolPolylines["fromtool-loc-ibl"]?.isVisible = isChecked
+            toolMarkers["fromdso-loc-ibl"]?.isVisible = isChecked
+            toolPolylines["fromdso-loc-ibl"]?.isVisible = isChecked
         }
 
         galileoSwitch.setOnCheckedChangeListener { _, isChecked ->
             Log.d("SwitchToggle", "galileoSwitch toggled: $isChecked")
-            toolMarkers["fromtool-loc-glt"]?.isVisible = isChecked
-            toolPolylines["fromtool-loc-glt"]?.isVisible = isChecked
+            toolMarkers["fromdso-loc-glt"]?.isVisible = isChecked
+            toolPolylines["fromdso-loc-glt"]?.isVisible = isChecked
         }
 
         fusionSwitch.setOnCheckedChangeListener { _, isChecked ->
             Log.d("SwitchToggle", "fusionSwitch toggled: $isChecked")
-            toolMarkers["fromtool-loc-fusion"]?.isVisible = isChecked
-            toolPolylines["fromtool-loc-fusion"]?.isVisible = isChecked
+            toolMarkers["fromdso-loc-fusion"]?.isVisible = isChecked
+            toolPolylines["fromdso-loc-fusion"]?.isVisible = isChecked
         }
         val remoteButton: Button = findViewById(R.id.remoteButton)
 
         remoteButton.setOnClickListener {
-            val items = arrayOf("1", "2","3")
+            val items = arrayOf("1", "2", "3")
 
             val builder = AlertDialog.Builder(this)
             builder.setTitle("Choose QR Code")
@@ -139,7 +147,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                 val qrMessage = "$selectedQR"
 
                 mqttHelper?.sendQRMessage(qrMessage)
-                Toast.makeText(this@MainActivity, "QR $selectedQR detected", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "QR $selectedQR detected", Toast.LENGTH_SHORT)
+                    .show()
 
 
             }
@@ -154,26 +163,31 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
             clearPolylines()
         }
         val showDebugButton: Button = findViewById(R.id.showDebugInfoButton)
+
+        val posButton: Button = findViewById(R.id.posButton)
+        posButton.setOnClickListener {
+            sendPositionDialog()
+        }
+
         val debugInfoContainer: FrameLayout = findViewById(R.id.debugInfoContainer)
 
         showDebugButton.setOnClickListener {
-            debugInfoContainer.visibility = if (debugInfoContainer.visibility == View.GONE) {
-                View.VISIBLE
-            } else {
-                View.GONE
-            }
+            isDebugInfoVisible = !isDebugInfoVisible
+            debugInfoContainer.visibility = if (isDebugInfoVisible) View.VISIBLE else View.GONE
+            showDebugButton.text = if (isDebugInfoVisible) "Hide Debug Info" else "Show Debug Info"
         }
     }
 
     private fun getColorByTopic(topic: String): Int {
         return when (topic) {
-            "fromtool-loc-self" -> Color.RED
-            "fromtool-loc-ibl" -> Color.GREEN
-            "fromtool-loc-glt" -> Color.BLUE
-            "fromtool-loc-fusion" -> Color.YELLOW
+            "fromdso-loc-self" -> Color.RED
+            "fromdso-loc-ibl" -> Color.GREEN
+            "fromdso-loc-glt" -> Color.BLUE
+            "fromdso-loc-fusion" -> Color.YELLOW
             else -> Color.GRAY
         }
     }
+
     private fun clearPolylines() {
         for ((key, polyline) in toolPolylines) {
             // Get the last point of each polyline
@@ -188,9 +202,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
             // Update the polyline on the map
             polyline.points = listOf(lastPoint)
         }
-        Toast.makeText(this@MainActivity,"Paths Cleared",Toast.LENGTH_SHORT).show()
+        Toast.makeText(this@MainActivity, "Paths Cleared", Toast.LENGTH_SHORT).show()
 
     }
+
     private fun showConnectDialog() {
         val builder = AlertDialog.Builder(this)
         val inflater = layoutInflater
@@ -209,7 +224,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
             builder.setNegativeButton("Disconnect") { _, _ ->
                 mqttHelper?.allowAutomaticReconnect = false
                 mqttHelper?.disconnect()
-                Toast.makeText(this@MainActivity, "Disconnected from Broker", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Disconnected from Broker", Toast.LENGTH_SHORT)
+                    .show()
             }
         } else {
             // If not connected, show the Cancel button
@@ -221,62 +237,80 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
             val connectionIndicator: ImageView = findViewById(R.id.connectionIndicator)
 
             if (brokerIp.isNotEmpty() && sourceId.isNotEmpty()) {
-                val timestamp = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).format(Date())
-                val clientId = "Client_$timestamp"
+                val timestamp =
+                    SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).format(Date())
+                val newClientId = "Client_$timestamp"
                 with(sharedPreferences.edit()) {
                     putString("brokerIp", brokerIp)
                     putString("sourceId", sourceId)
                     apply()
                 }
-                mqttHelper = MqttHelper(this@MainActivity, "tcp://$brokerIp:1883", clientId, sourceId)
 
-                mqttHelper?.let {
-                    if (it.initialConnectionSuccess == true) {
-                        it.startCheckingConnectionStatus { isConnected ->
-                            Log.d("MQTT_STATUS", "Connected: $isConnected")
-                            val color = if (isConnected) Color.GREEN else Color.RED
-                            ImageViewCompat.setImageTintList(connectionIndicator, ColorStateList.valueOf(color))
+                if (mqttHelper == null || !mqttHelper!!.isConnected()) {
+                    mqttHelper = MqttHelper(this@MainActivity, "tcp://$brokerIp:1883", newClientId, sourceId)
+                } else {
+                    mqttHelper?.reconnectIfNeeded("tcp://$brokerIp:1883", sourceId)
+                }
+
+                val topics = listOf(
+                    "fromdso-loc-self",
+                    "fromdso-loc-ibl",
+                    "fromdso-loc-glt",
+                    "fromdso-loc-fusion",
+                    "fromtool-loc-self-debug"
+                )
+                mqttHelper?.resubscribeToTopics(topics)
+
+                mqttHelper?.startCheckingConnectionStatus { isConnected ->
+                    Log.d("MQTT_STATUS", "Connected: $isConnected")
+                    val color = if (isConnected) Color.GREEN else Color.RED
+                    ImageViewCompat.setImageTintList(
+                        connectionIndicator,
+                        ColorStateList.valueOf(color)
+                    )
+                }
+            }
+
+            mqttHelper?.subscribe("fromdso-loc-self")
+            mqttHelper?.subscribe("fromdso-loc-ibl")
+            mqttHelper?.subscribe("fromdso-loc-glt")
+            mqttHelper?.subscribe("fromdso-loc-fusion")
+            mqttHelper?.subscribe("fromtool-loc-self-debug")
+
+            mqttHelper?.setCallback(object : MqttCallback {
+                override fun connectionLost(cause: Throwable?) {
+                    Log.d("MQTT", "Connection lost: ${cause?.message}")
+                    cause?.printStackTrace()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Disconnected from Broker ${cause?.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                override fun messageArrived(topic: String?, message: MqttMessage?) {
+                    Log.d("MQTT", "Message arrived from topic: $topic")
+                    val msgString = String(message!!.payload)
+                    val jsonObject = JSONObject(msgString)
+
+                    if (topic != null && message != null) {
+                        if (jsonObject.optString("sourceID") == mqttHelper?.obtainSourceId()) {
+                            handleIncomingMessage(topic, message)
                         }
                     }
                 }
 
-                mqttHelper?.subscribe("fromtool-loc-self")
-                mqttHelper?.subscribe("fromtool-loc-ibl")
-                mqttHelper?.subscribe("fromtool-loc-glt")
-                mqttHelper?.subscribe("fromtool-loc-fusion")
-                mqttHelper?.subscribe("fromtool-loc-self-debug")
-
-                mqttHelper?.setCallback(object : MqttCallback {
-                    override fun connectionLost(cause: Throwable?) {
-                        Log.d("MQTT", "Connection lost: ${cause?.message}")
-                        cause?.printStackTrace()
-                        Toast.makeText(this@MainActivity, "Disconnected from Broker ${cause?.message}", Toast.LENGTH_SHORT).show()
-                    }
-
-                    override fun messageArrived(topic: String?, message: MqttMessage?) {
-                        Log.d("MQTT", "Message arrived from topic: $topic")
-                        val msgString = String(message!!.payload)
-                        val jsonObject = JSONObject(msgString)
-
-                        if (topic != null && message != null) {
-                            if (jsonObject.optString("sourceID") == mqttHelper?.obtainSourceId()) {
-                                handleIncomingMessage(topic, message)
-                            }
-                        }
-                    }
-
-                    override fun deliveryComplete(token: IMqttDeliveryToken?) {
-                        Log.d("MQTT", "Delivery complete")
-                    }
-                })
-
-                val switchIds = arrayOf(R.id.switch1, R.id.switch2, R.id.switch3, R.id.switch4)
-                for (id in switchIds) {
-                    val switch = findViewById<Switch>(id)
-                    val currentState = switch.isChecked
-                    switch.isChecked = !currentState
-                    switch.isChecked = currentState
+                override fun deliveryComplete(token: IMqttDeliveryToken?) {
+                    Log.d("MQTT", "Delivery complete")
                 }
+            })
+
+            val switchIds = arrayOf(R.id.switch1, R.id.switch2, R.id.switch3, R.id.switch4)
+            for (id in switchIds) {
+                val switch = findViewById<Switch>(id)
+                val currentState = switch.isChecked
+                switch.isChecked = !currentState
+                switch.isChecked = currentState
             }
         }
 
@@ -295,6 +329,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
 
         builder.show()
     }
+
     private fun showInfoDialog() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Credits")
@@ -339,39 +374,13 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         val matrix = Matrix().apply { postRotate(angle) }
         return BitmapDescriptorFactory.fromBitmap(Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true))
     }
-    private fun getCustomIcon(topic: String, heading: Double): BitmapDescriptor? {
-        val cacheKey = "$topic-$heading"
-        bitmapCache[cacheKey]?.let {
-            return it // Return cached bitmap if available
-        }
-
-        // If not in cache, create a new bitmap
-        val context = this@MainActivity
-        val angle = heading.toFloat()
-
-        val iconResource = when (topic) {
-            "fromtool-loc-self" -> R.drawable.ic_visual_loc
-            "fromtool-loc-ibl" -> R.drawable.ic_inertial_loc
-            "fromtool-loc-glt" -> R.drawable.ic_galileo_loc
-            "fromtool-loc-fusion" -> R.drawable.ic_fusion_loc
-            else -> null
-        }
-
-        val bitmap = iconResource?.let { BitmapFactory.decodeResource(context.resources, it) }
-        val rotatedBitmap = bitmap?.let { rotateBitmap(it, angle) }
-
-        rotatedBitmap?.let {
-            bitmapCache[cacheKey] = it
-            return it
-        }
-
-        return null
-    }
 
     private fun handleIncomingMessage(topic: String, message: MqttMessage) {
         if (!::mMap.isInitialized) {
             return
         }
+
+        // Handling debug messages
         if (topic == "fromtool-loc-self-debug") {
             val msgString = String(message.payload)
             runOnUiThread {
@@ -379,6 +388,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                 debugTextView.text = msgString
             }
         }
+
+        // Parsing message payload
         val payload = String(message.payload)
         val jsonObject = JSONObject(payload)
         val infoprioPayload = jsonObject.getJSONObject("infoprioPayload")
@@ -399,56 +410,38 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         val outdoor = if (toolData.has("outdoor")) toolData.optBoolean("outdoor") else null
 
         val markerData = MarkerData(
-            sourceId,
-            toolID,
-            lat,
-            lon,
-            heading,
-            altitude,
-            mounting,
-            speed,
-            distance,
-            quality,
-            qualityHeading,
-            outdoor
+            sourceId, toolID, lat, lon, heading, altitude, mounting, speed, distance, quality, qualityHeading, outdoor, topic
         )
-        val path = toolPaths.getOrPut(topic) { mutableListOf() }
-        path.add(latLng)
+
 
         runOnUiThread {
-            // Remove old marker if it exists
-            toolMarkers[topic]?.remove()
+            // Update or create marker
+            val existingMarker = toolMarkers[topic]
+            val markerIcon = rotateAndColorBitmap(
+                BitmapFactory.decodeResource(resources, getIconResourceByTopic(topic)),
+                heading.toFloat(),
+                getColorByTopic(topic),
+                255 // 100% opacity
+            )
+            val marker = toolMarkers[topic]
 
-            val markerIcon = when (topic) {
-                "fromtool-loc-self" -> rotateBitmap(BitmapFactory.decodeResource(resources, R.drawable.ic_visual_loc), heading.toFloat())
-                "fromtool-loc-ibl" -> rotateBitmap(BitmapFactory.decodeResource(resources, R.drawable.ic_inertial_loc), heading.toFloat())
-                "fromtool-loc-glt" -> rotateBitmap(BitmapFactory.decodeResource(resources, R.drawable.ic_galileo_loc), heading.toFloat())
-                "fromtool-loc-fusion" -> rotateBitmap(BitmapFactory.decodeResource(resources, R.drawable.ic_fusion_loc), heading.toFloat())
-                else -> null // Use default marker if no custom icon is available
-            }
 
-            val markerOptions = MarkerOptions()
-                .position(latLng)
-                .title("$sourceId - $topic")
-
-            if (markerIcon != null) {
-                markerOptions.icon(markerIcon)
-                // Set the anchor point to the center of the icon
-                markerOptions.anchor(0.5f, 0.5f)
+            if (existingMarker != null) {
+                existingMarker.position = latLng
+                existingMarker.setIcon(markerIcon)
             } else {
-                // Use the default marker with a color hue based on the topic
-                markerOptions.icon(BitmapDescriptorFactory.defaultMarker(getHueByTopic(topic)))
-            }
+                val markerOptions = MarkerOptions()
+                    .position(latLng)
+                    .title("$sourceId - $topic")
+                    .icon(markerIcon)
+                    .anchor(0.5f, 0.5f)
 
-            val marker = mMap.addMarker(markerOptions)
-            marker?.let {
-                it.isVisible = getSwitchStateBasedOnTopic(topic)
-                markerDataMap[it] = markerData // Associate data with marker
+                toolMarkers[topic] = mMap.addMarker(markerOptions)
             }
-
-            toolMarkers[topic] = marker // Update marker reference in the map
 
             // Update polyline
+            val path = toolPaths.getOrPut(topic) { mutableListOf() }
+            path.add(latLng)
             val polyline = toolPolylines[topic]
             if (polyline != null) {
                 polyline.points = path
@@ -456,24 +449,57 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                 val newPolyline = mMap.addPolyline(PolylineOptions().addAll(path).color(getColorByTopic(topic)))
                 toolPolylines[topic] = newPolyline
             }
+
+            // Update marker data
+            toolMarkers[topic]?.let { marker ->
+                markerDataMap[marker] = markerData
+                marker.isVisible = getSwitchStateBasedOnTopic(topic)
+
+                // If this marker is the selected marker, update the info panel
+                if (selectedMarker == marker) {
+                    updateInfoPanel(markerData)
+                }
+            }
+
         }
     }
-    private fun getHueByTopic(topic: String): Float {
+
+    private fun getIconResourceByTopic(topic: String): Int {
         return when (topic) {
-            "fromdso-loc-self" -> BitmapDescriptorFactory.HUE_RED
-            "fromdso-loc-ibl" -> BitmapDescriptorFactory.HUE_GREEN
-            "fromdso-loc-glt" -> BitmapDescriptorFactory.HUE_BLUE
-            "fromtool-fusion-debug" -> BitmapDescriptorFactory.HUE_YELLOW
-            else -> BitmapDescriptorFactory.HUE_VIOLET // Default hue
+            "fromdso-loc-self" -> R.drawable.ic_visual_loc
+            "fromdso-loc-ibl" -> R.drawable.ic_inertial_loc
+            "fromdso-loc-glt" -> R.drawable.ic_galileo_loc
+            "fromdso-loc-fusion" -> R.drawable.ic_fusion_loc
+            else -> 0 // Default or no icon
         }
+    }
+
+    private fun rotateAndColorBitmap(source: Bitmap, angle: Float, color: Int, opacity: Int, scale: Float = 0.3f): BitmapDescriptor {
+        val matrix = Matrix().apply {
+            postRotate(angle)
+            postScale(scale, scale)  // Scale down the bitmap
+        }
+
+        val alteredBitmap = Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+
+        // Applying color filter and opacity
+        val paint = Paint().apply {
+            colorFilter = PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP)
+            alpha = opacity
+        }
+
+        val canvas = Canvas(alteredBitmap)
+        canvas.drawBitmap(alteredBitmap, 0f, 0f, paint)
+
+        return BitmapDescriptorFactory.fromBitmap(alteredBitmap)
     }
 
     private fun getSwitchStateBasedOnTopic(topic: String): Boolean {
         val switchId = when (topic) {
-            "fromtool-loc-self" -> R.id.switch1
-            "fromtool-loc-ibl" -> R.id.switch2
-            "fromtool-loc-glt" -> R.id.switch3
-            "fromtool-loc-fusion" -> R.id.switch4
+            "fromdso-loc-self" -> R.id.switch1
+            "fromdso-loc-ibl" -> R.id.switch2
+            "fromdso-loc-glt" -> R.id.switch3
+            "fromdso-loc-fusion" -> R.id.switch4
             else -> null
         }
         return switchId?.let { findViewById<Switch>(it).isChecked } ?: true
@@ -504,12 +530,71 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         }
         builder.show()
     }
+    private fun sendPositionDialog() {
+        val builder = AlertDialog.Builder(this)
+        val inflater = layoutInflater
+        val dialogLayout = inflater.inflate(R.layout.dialog_send_position, null)
+        val editTextLatitude = dialogLayout.findViewById<EditText>(R.id.editTextLatitude)
+        val editTextLongitude = dialogLayout.findViewById<EditText>(R.id.editTextLongitude)
+        val editTextHeading = dialogLayout.findViewById<EditText>(R.id.editTextHeading)
+        val editTextAltitude = dialogLayout.findViewById<EditText>(R.id.editTextAltitude)
+
+        // Load last values
+        val lastLatitude = sharedPreferences.getString("lastLatitude", "")
+        val lastLongitude = sharedPreferences.getString("lastLongitude", "")
+        val lastHeading = sharedPreferences.getString("lastHeading", "")
+        val lastAltitude = sharedPreferences.getString("lastAltitude", "")
+
+        editTextLatitude.setText(lastLatitude)
+        editTextLongitude.setText(lastLongitude)
+        editTextHeading.setText(lastHeading)
+        editTextAltitude.setText(lastAltitude)
+
+        builder.setView(dialogLayout)
+        builder.setNegativeButton("Cancel") { _, _ -> }
+        builder.setPositiveButton("Send") { _, _ ->
+            try {
+                val latitude = editTextLatitude.text.toString().toFloat()
+                val longitude = editTextLongitude.text.toString().toFloat()
+                val heading = editTextHeading.text.toString().toFloat()
+                val altitude = editTextAltitude.text.toString()
+
+                if (latitude in -90.0..90.0 && longitude in -180.0..180.0 && heading in 0.0..360.0) {
+                    // Save current values
+                    with(sharedPreferences.edit()) {
+                        putString("lastLatitude", latitude.toString())
+                        putString("lastLongitude", longitude.toString())
+                        putString("lastHeading", heading.toString())
+                        putString("lastAltitude", altitude)
+                        apply()
+                    }
+
+                    mqttHelper?.sendQLocMessage(latitude.toString(), longitude.toString(), heading.toString(), altitude)
+                    Toast.makeText(this, "Position data sent", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Invalid latitude, longitude, or heading values", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: NumberFormatException) {
+                Toast.makeText(this, "Please enter valid numeric values", Toast.LENGTH_SHORT).show()
+            }
+        }
+        builder.show()
+    }
+    private fun updateMarkerRotations() {
+        val bearing = mMap.cameraPosition.bearing
+        toolMarkers.values.forEach { marker ->
+            marker?.rotation = -bearing
+        }
+    }
 
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         mMap.setInfoWindowAdapter(CustomInfoWindowAdapter(this))
         mMap.setOnMarkerClickListener(this)
 
+        mMap.setOnCameraMoveListener {
+            updateMarkerRotations()
+        }
         mMap.mapType = GoogleMap.MAP_TYPE_SATELLITE // Initial map type
         val introMark = LatLng(45.195836810455404, 6.667267626055969)
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(introMark, 16.5f))
@@ -527,24 +612,46 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         }
     }
     override fun onMarkerClick(marker: Marker): Boolean {
+        selectedMarker = marker
         markerDataMap[marker]?.let { data ->
-            val info = StringBuilder()
-            info.append("Source ID: ").append(data.sourceId).append("\n")
-            info.append("Latitude: ").append(data.latitude).append("\n")
-            info.append("Longitude: ").append(data.longitude).append("\n")
-            data.heading?.let { info.append("Heading: ").append(it).append("\n") }
-            data.altitude?.let { info.append("Altitude: ").append(it).append("\n") }
-            // Append other data fields as needed
-
-            infoContent.text = info.toString()
+            updateInfoPanel(data)
             customInfoPanel.visibility = View.VISIBLE
         }
         return true
     }
+    private fun updateInfoPanel(data: MarkerData) {
+        val info = StringBuilder()
+        info.append("Tool ID: ").append(data.toolID).append("\n")
+        info.append("Source ID: ").append(data.sourceId).append("\n")
+        info.append("Latitude: ").append(data.latitude).append("\n")
+        info.append("Longitude: ").append(data.longitude).append("\n")
+        data.heading?.let { info.append("Heading: ").append(it).append("\n") }
+        data.altitude?.let { info.append("Altitude: ").append(it).append("\n") }
+        // Append other data fields as needed
 
+        infoContent.text = info.toString()
+    }
+
+    private fun toggleButtonsVisibility() {
+        val buttonsAndSwitchesIds = arrayOf(
+            R.id.button, R.id.switch1, R.id.switch2, R.id.switch3,
+            R.id.switch4, R.id.focusLastMarkerButton, R.id.remoteButton,
+            R.id.infoButton, R.id.clearButton, R.id.connectionIndicator,
+            R.id.showDebugInfoButton, R.id.mapTypeButton, R.id.posButton,
+            R.id.button
+        )
+
+        areButtonsVisible = !areButtonsVisible
+
+        buttonsAndSwitchesIds.forEach { id ->
+            findViewById<View>(id).visibility = if (areButtonsVisible) View.VISIBLE else View.GONE
+        }
+
+        val toggleButton: Button = findViewById(R.id.toggleButton)
+        toggleButton.text = if (areButtonsVisible) "Hide Buttons" else "Show Buttons"
+    }
     override fun onDestroy() {
         super.onDestroy()
-        tileCacheManager.persistCacheToData()
         mqttHelper?.disconnect()
         mqttHelper?.stopCheckingConnectionStatus()  // Stop checking connection status
     }

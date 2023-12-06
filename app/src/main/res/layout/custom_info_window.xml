@@ -2,7 +2,7 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@drawable/info_window_background"
+    android:background="#FFFFFF"
     android:padding="10dp">
 
     <TextView
@@ -10,7 +10,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textStyle="bold"
-        android:textColor="#808080"/>
+        android:textColor="@android:color/black"/>
 
     <TextView
         android:id="@+id/snippet"

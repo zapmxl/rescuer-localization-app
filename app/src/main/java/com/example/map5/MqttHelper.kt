@@ -14,10 +14,8 @@ import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import android.widget.Toast
 
-class MqttHelper(val context: Context,
-                 private val brokerUrl: String,
-                 private val clientId: String,
-                 val sourceId: String) {
+class MqttHelper(val context: Context, var brokerUrl: String,
+                 private var clientId: String, var sourceId: String) {
 
     companion object {
         const val QOS_LEVEL = 1
@@ -34,6 +32,7 @@ class MqttHelper(val context: Context,
     private val debouncedReconnect = debounce(2000L) { actualReconnect() }
     private var reconnectAttempts = 0
     private var reconnectDelay = INITIAL_RECONNECT_DELAY
+    private val subscribedTopics = mutableListOf<String>()
 
     init {
         reconnect()
@@ -64,12 +63,27 @@ class MqttHelper(val context: Context,
                 wasPreviouslyConnected = true
             }
             initialConnectionSuccess = true
+            resubscribeToTopics()
         } catch (e: MqttException) {
             e.printStackTrace()
             Toast.makeText(context, "Failed to Connect to Broker", Toast.LENGTH_SHORT).show()
             if (initialConnectionSuccess == null) {
                 initialConnectionSuccess = false
             }
+        }
+    }
+    fun reconnectIfNeeded(newBrokerUrl: String, newSourceId: String) {
+        if (brokerUrl != newBrokerUrl || sourceId != newSourceId) {
+            brokerUrl = newBrokerUrl
+            sourceId = newSourceId
+            disconnect()
+            reconnect()
+        }
+    }
+
+    fun resubscribeToTopics(topics: List<String>) {
+        topics.forEach { topic ->
+            subscribe(topic)
         }
     }
     private fun debounce(windowDuration: Long, action: () -> Unit): () -> Unit {
@@ -135,7 +149,7 @@ class MqttHelper(val context: Context,
         publish("fromtool-android-app", jsonMessage.toString(), QOS_LEVEL)
     }
 
-    fun sendQLocMessage(qrMessage: String) {
+    fun sendQLocMessage(latitude: String, longitude: String, heading: String, altitude: String) {
         val currentTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.ENGLISH).format(Date())
         val jsonMessage = JSONObject()
 
@@ -143,11 +157,10 @@ class MqttHelper(val context: Context,
         jsonMessage.put("sourceID", sourceId)
         jsonMessage.put("broadcast", false)
         jsonMessage.put("startTS", currentTime)
-        jsonMessage.put("Latitude", qrMessage)
-        jsonMessage.put("Longitude", qrMessage)
-        jsonMessage.put("Altitude", qrMessage)
-
-
+        jsonMessage.put("Latitude", latitude)
+        jsonMessage.put("Longitude", longitude)
+        jsonMessage.put("Altitude", altitude)
+        jsonMessage.put("Heading", heading)
 
         publish("fromtool-android-app", jsonMessage.toString(), QOS_LEVEL)
     }
@@ -163,12 +176,23 @@ class MqttHelper(val context: Context,
     }
     fun subscribe(topic: String) {
         try {
-            client?.subscribe(topic, QOS_LEVEL)  // Set the QoS level here
+            client?.subscribe(topic, QOS_LEVEL)
+            if (!subscribedTopics.contains(topic)) {
+                subscribedTopics.add(topic)
+            }
         } catch (e: MqttException) {
             e.printStackTrace()
         }
     }
-
+    private fun resubscribeToTopics() {
+        subscribedTopics.forEach { topic ->
+            try {
+                client?.subscribe(topic, QOS_LEVEL)
+            } catch (e: MqttException) {
+                e.printStackTrace()
+            }
+        }
+    }
     fun unsubscribe(topic: String) {
         try {
             client?.unsubscribe(topic)
@@ -181,6 +205,8 @@ class MqttHelper(val context: Context,
         try {
             allowAutomaticReconnect = false
             client?.disconnect()
+            client = null
+            wasPreviouslyConnected = false
         } catch (e: MqttException) {
             e.printStackTrace()
         }
