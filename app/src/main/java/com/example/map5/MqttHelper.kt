@@ -99,25 +99,32 @@ class MqttHelper(val context: Context, var brokerUrl: String,
     }
 
     fun startCheckingConnectionStatus(callback: (Boolean) -> Unit) {
-        if (isCheckingConnectionStatus) return // Return if it's already checking
+        if (isCheckingConnectionStatus) {
+            // Stop the existing loop before starting a new one
+            stopCheckingConnectionStatus()
+        }
 
-        val checkInterval = 1000L // 1000 milliseconds = 1 second
-        handler.postDelayed(object : Runnable {
+        val checkInterval = 1000L // Check every second
+        val statusCheckRunnable = object : Runnable {
             override fun run() {
                 val isConnected = isConnected()
                 callback.invoke(isConnected)
+
                 if (!isConnected && allowAutomaticReconnect) {
                     Toast.makeText(context, "Disconnected. Attempting to reconnect...", Toast.LENGTH_SHORT).show()
-                    reconnect()  // Attempt to reconnect if not connected
+                    reconnect()
                 }
-                if (isCheckingConnectionStatus) {  // Check again if it should continue checking
+
+                if (isCheckingConnectionStatus) {
                     handler.postDelayed(this, checkInterval)
                 }
             }
-        }, checkInterval)
+        }
 
-        isCheckingConnectionStatus = true  // Set the flag to true
+        handler.postDelayed(statusCheckRunnable, checkInterval)
+        isCheckingConnectionStatus = true
     }
+
 
     fun isConnected(): Boolean {
         return client?.isConnected == true
@@ -132,6 +139,7 @@ class MqttHelper(val context: Context, var brokerUrl: String,
     }
     fun stopCheckingConnectionStatus() {
         isCheckingConnectionStatus = false
+        handler.removeCallbacksAndMessages(null) // Stop all callbacks
     }
 
     //Publish JSON "signal" from app

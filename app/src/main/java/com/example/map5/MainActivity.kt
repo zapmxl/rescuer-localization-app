@@ -318,10 +318,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         if (mqttHelper?.isConnected() == true) {
             // If connected, show the Disconnect button
             builder.setNegativeButton("Disconnect") { _, _ ->
-                mqttHelper?.allowAutomaticReconnect = false
-                mqttHelper?.disconnect()
-                Toast.makeText(this@MainActivity, "Disconnected from Broker", Toast.LENGTH_SHORT).show()
+                mqttHelper?.let {
+                    it.allowAutomaticReconnect = false
+                    it.disconnect()
+                    it.stopCheckingConnectionStatus() // Stop the connection status check loop
+                    // Update the connectionIndicator to red immediately
+                    val connectionIndicator: ImageView = findViewById(R.id.connectionIndicator)
+                    ImageViewCompat.setImageTintList(connectionIndicator, ColorStateList.valueOf(Color.RED))
+                    Toast.makeText(this, "Disconnected from Broker", Toast.LENGTH_SHORT).show()
+                }
             }
+
         } else {
             // If not connected, show the Cancel button
             builder.setNegativeButton("Cancel") { _, _ -> }
@@ -562,8 +569,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                 if (latitude in -90.0..90.0 && longitude in -180.0..180.0 && heading in 0.0..360.0) {
                     // Save current values
                     with(sharedPreferences.edit()) {
-                        putString("lastLatitude", latitude.toString())
-                        putString("lastLongitude", longitude.toString())
+                        putString("lastLatitude", String.format("%.10f", latitude))
+                        putString("lastLongitude", String.format("%.10f", longitude))
                         putString("lastHeading", heading.toString())
                         putString("lastAltitude", altitude)
                         apply()
