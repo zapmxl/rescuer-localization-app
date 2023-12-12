@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
     private var areButtonsVisible = true
     private var selectedMarker: Marker? = null
     private var isDebugInfoVisible = false
+    private var latestDebugMessage: String = ""
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -162,19 +163,27 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         clearButton.setOnClickListener {
             clearPolylines()
         }
-        val showDebugButton: Button = findViewById(R.id.showDebugInfoButton)
 
         val posButton: Button = findViewById(R.id.posButton)
         posButton.setOnClickListener {
             sendPositionDialog()
         }
 
+        val showDebugButton: Button = findViewById(R.id.showDebugInfoButton)
         val debugInfoContainer: FrameLayout = findViewById(R.id.debugInfoContainer)
 
         showDebugButton.setOnClickListener {
-            isDebugInfoVisible = !isDebugInfoVisible
-            debugInfoContainer.visibility = if (isDebugInfoVisible) View.VISIBLE else View.GONE
-            showDebugButton.text = if (isDebugInfoVisible) "Hide Debug Info" else "Show Debug Info"
+            if (debugInfoContainer.visibility == View.GONE) {
+                debugInfoContainer.visibility = View.VISIBLE
+                showDebugButton.text = "Hide Debug Info"
+
+                // Update the debug text view with the latest debug message
+                val debugTextView: TextView = findViewById(R.id.debugTextView)
+                debugTextView.text = latestDebugMessage
+            } else {
+                debugInfoContainer.visibility = View.GONE
+                showDebugButton.text = "Show Debug Info"
+            }
         }
     }
 
@@ -289,17 +298,25 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                 }
 
                 override fun messageArrived(topic: String?, message: MqttMessage?) {
-                    Log.d("MQTT", "Message arrived from topic: $topic")
-                    val msgString = String(message!!.payload)
-                    val jsonObject = JSONObject(msgString)
+                    val payload = message?.payload
+                    if (payload != null) {
+                        val msgString = String(payload)
+                        Log.d("MQTT Message", "Topic: $topic, Message: $msgString") // Log every received message
 
-                    if (topic != null && message != null) {
-                        if (jsonObject.optString("sourceID") == mqttHelper?.obtainSourceId()) {
-                            handleIncomingMessage(topic, message)
+                        if (topic == "fromtool-loc-self-debug") {
+                            // Handle debug messages
+                            handleDebugMessage(msgString)
+                        } else {
+                            // Handle other messages
+                            val jsonObject = JSONObject(msgString)
+                            if (jsonObject.optString("sourceID") == mqttHelper?.obtainSourceId()) {
+                                if (topic != null) {
+                                    handleIncomingMessage(topic, message)
+                                }
+                            }
                         }
                     }
                 }
-
                 override fun deliveryComplete(token: IMqttDeliveryToken?) {
                     Log.d("MQTT", "Delivery complete")
                 }
@@ -387,17 +404,14 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
             return
         }
 
-        // Handling debug messages
-        if (topic == "fromtool-loc-self-debug") {
-            val msgString = String(message.payload)
-            runOnUiThread {
-                val debugTextView: TextView = findViewById(R.id.debugTextView)
-                debugTextView.text = msgString
-            }
-        }
-
-        // Parsing message payload
         val payload = String(message.payload)
+        Log.d("MQTT Message", "Topic: $topic, Message: $payload")
+
+        // Check for debug messages
+        if (topic == "fromtool-loc-self-debug") {
+            handleDebugMessage(payload)
+            return
+        }
         val jsonObject = JSONObject(payload)
         val infoprioPayload = jsonObject.getJSONObject("infoprioPayload")
         val toolData = infoprioPayload.getJSONArray("toolData").getJSONObject(0)
@@ -468,6 +482,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                 }
             }
 
+        }
+    }
+
+    private fun handleDebugMessage(debugMessage: String) {
+        latestDebugMessage = debugMessage // Store the latest message
+        Log.d("Debug_Topic_Message", "Received debug message: $debugMessage")
+        runOnUiThread {
+            val debugTextView: TextView = findViewById(R.id.debugTextView)
+            debugTextView.text = debugMessage
         }
     }
 
