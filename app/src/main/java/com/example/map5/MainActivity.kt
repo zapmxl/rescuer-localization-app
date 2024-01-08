@@ -45,6 +45,7 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import com.google.android.gms.maps.model.BitmapDescriptor
+import org.json.JSONException
 
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerClickListener {
@@ -499,26 +500,34 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
     }
 
     private fun handleDebugMessage(debugMessage: String) {
-        latestDebugMessage = debugMessage // Store the latest message
-        Log.d("Debug_Topic_Message", "Received debug message: $debugMessage")
+        val consoleMessage = extractConsoleMessage(debugMessage)
+        latestDebugMessage = consoleMessage // Store the latest message
+        Log.d("Debug_Topic_Message", "Received debug message: $consoleMessage")
         runOnUiThread {
             val debugTextView: TextView = findViewById(R.id.debugTextView)
-            debugTextView.text = debugMessage
+            debugTextView.text = consoleMessage
         }
     }
 
     private fun handleFusionDebugMessage(debugMessage: String) {
-        latestFusionDebugMessage = debugMessage // Store the latest fusion debug message
-        Log.d("Fusion_Debug_Topic_Message", "Received fusion debug message: $latestFusionDebugMessage")
+        val consoleMessage = extractConsoleMessage(debugMessage)
+        latestFusionDebugMessage = consoleMessage // Store the latest fusion debug message
+        Log.d("Fusion_Debug_Topic_Message", "Received fusion debug message: $consoleMessage")
 
-        // You can update a dedicated UI element here if needed, similar to the previous debug message handling
-        // For instance:
         runOnUiThread {
             val fusionDebugTextView: TextView = findViewById(R.id.fusionDebugTextView)
-            fusionDebugTextView.text = latestFusionDebugMessage
+            fusionDebugTextView.text = consoleMessage
         }
     }
 
+    private fun extractConsoleMessage(jsonString: String): String {
+        return try {
+            val jsonObject = JSONObject(jsonString)
+            jsonObject.optString("console", "No message") // Default message if key not found
+        } catch (e: JSONException) {
+            "Invalid JSON"
+        }
+    }
     private fun getIconResourceByTopic(topic: String): Int {
         return when (topic) {
             "fromdso-loc-self" -> R.drawable.ic_visual_loc
