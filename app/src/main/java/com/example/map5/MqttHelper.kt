@@ -154,7 +154,7 @@ class MqttHelper(val context: Context, var brokerUrl: String,
         jsonMessage.put("QR", qrMessage)
 
 
-        publish("fromtool-android-app", jsonMessage.toString(), QOS_LEVEL)
+        publish("internal-comms-android-app", jsonMessage.toString(), QOS_LEVEL)
     }
 
     fun sendQLocMessage(latitude: String, longitude: String, heading: String, altitude: String) {
@@ -170,7 +170,7 @@ class MqttHelper(val context: Context, var brokerUrl: String,
         jsonMessage.put("Altitude", altitude)
         jsonMessage.put("Heading", heading)
 
-        publish("fromtool-android-app", jsonMessage.toString(), QOS_LEVEL)
+        publish("internal-comms-android-app", jsonMessage.toString(), QOS_LEVEL)
     }
 
     fun publish(topic: String, message: String, QOS_LEVEL: Int = 1 ) {

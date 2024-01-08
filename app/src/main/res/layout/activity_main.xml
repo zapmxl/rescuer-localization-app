@@ -189,17 +189,32 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <FrameLayout
-        android:id="@+id/debugInfoContainer"
+        android:id="@+id/fusionDebugInfoContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:visibility="gone"
-        android:background="@android:color/white"
+        android:background="#FCECB3"
         android:textColor="#000000"
         android:elevation="4dp"
         android:padding="10dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
+        <include layout="@layout/fusion_debug_info_layout"/>
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/debugInfoContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:background="#F8BBBB"
+        android:textColor="#000000"
+        android:elevation="4dp"
+        android:padding="10dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/fusionDebugInfoContainer">
         <include layout="@layout/debug_info_layout"/>
     </FrameLayout>
 

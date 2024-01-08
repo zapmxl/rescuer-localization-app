@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
     private var selectedMarker: Marker? = null
     private var isDebugInfoVisible = false
     private var latestDebugMessage: String = ""
+    private var latestFusionDebugMessage: String = ""
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -171,17 +172,26 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
 
         val showDebugButton: Button = findViewById(R.id.showDebugInfoButton)
         val debugInfoContainer: FrameLayout = findViewById(R.id.debugInfoContainer)
+        val fusionDebugInfoContainer: FrameLayout = findViewById(R.id.fusionDebugInfoContainer)
 
         showDebugButton.setOnClickListener {
             if (debugInfoContainer.visibility == View.GONE) {
                 debugInfoContainer.visibility = View.VISIBLE
+                fusionDebugInfoContainer.visibility =
+                    View.VISIBLE // Show the fusion debug info container
                 showDebugButton.text = "Hide Debug Info"
 
                 // Update the debug text view with the latest debug message
                 val debugTextView: TextView = findViewById(R.id.debugTextView)
+                val fusionDebugTextView: TextView =
+                    findViewById(R.id.fusionDebugTextView) // Reference to the fusion debug TextView
                 debugTextView.text = latestDebugMessage
+                fusionDebugTextView.text =
+                    latestFusionDebugMessage // Update the fusion debug TextView
             } else {
                 debugInfoContainer.visibility = View.GONE
+                fusionDebugInfoContainer.visibility =
+                    View.GONE // Hide the fusion debug info container
                 showDebugButton.text = "Show Debug Info"
             }
         }
@@ -266,7 +276,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                     "fromdso-loc-ibl",
                     "fromdso-loc-glt",
                     "fromdso-loc-fusion",
-                    "fromtool-loc-self-debug"
+                    "internal-comms-self-debug"
                 )
                 mqttHelper?.resubscribeToTopics(topics)
 
@@ -284,7 +294,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
             mqttHelper?.subscribe("fromdso-loc-ibl")
             mqttHelper?.subscribe("fromdso-loc-glt")
             mqttHelper?.subscribe("fromdso-loc-fusion")
-            mqttHelper?.subscribe("fromtool-loc-self-debug")
+            mqttHelper?.subscribe("internal-comms-self-debug")
+            mqttHelper?.subscribe("internal-comms-fusion-debug")
+
 
             mqttHelper?.setCallback(object : MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
@@ -303,10 +315,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                         val msgString = String(payload)
                         Log.d("MQTT Message", "Topic: $topic, Message: $msgString") // Log every received message
 
-                        if (topic == "fromtool-loc-self-debug") {
-                            // Handle debug messages
-                            handleDebugMessage(msgString)
-                        } else {
+                        when (topic) {
+                            "internal-comms-self-debug" -> handleDebugMessage(msgString)
+                            "internal-comms-fusion-debug" -> handleFusionDebugMessage(msgString)
+                        else -> {
                             // Handle other messages
                             val jsonObject = JSONObject(msgString)
                             if (jsonObject.optString("sourceID") == mqttHelper?.obtainSourceId()) {
@@ -316,6 +328,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                             }
                         }
                     }
+                }
                 }
                 override fun deliveryComplete(token: IMqttDeliveryToken?) {
                     Log.d("MQTT", "Delivery complete")
@@ -408,7 +421,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         Log.d("MQTT Message", "Topic: $topic, Message: $payload")
 
         // Check for debug messages
-        if (topic == "fromtool-loc-self-debug") {
+        if (topic == "internal-comms-self-debug") {
             handleDebugMessage(payload)
             return
         }
@@ -494,6 +507,18 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         }
     }
 
+    private fun handleFusionDebugMessage(debugMessage: String) {
+        latestFusionDebugMessage = debugMessage // Store the latest fusion debug message
+        Log.d("Fusion_Debug_Topic_Message", "Received fusion debug message: $latestFusionDebugMessage")
+
+        // You can update a dedicated UI element here if needed, similar to the previous debug message handling
+        // For instance:
+        runOnUiThread {
+            val fusionDebugTextView: TextView = findViewById(R.id.fusionDebugTextView)
+            fusionDebugTextView.text = latestFusionDebugMessage
+        }
+    }
+
     private fun getIconResourceByTopic(topic: String): Int {
         return when (topic) {
             "fromdso-loc-self" -> R.drawable.ic_visual_loc
@@ -504,7 +529,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         }
     }
 
-    private fun rotateAndColorBitmap(source: Bitmap, angle: Float, color: Int, opacity: Int, scale: Float = 0.3f): BitmapDescriptor {
+    private fun rotateAndColorBitmap(source: Bitmap, angle: Float, color: Int, opacity: Int, scale: Float = 0.35f): BitmapDescriptor {
         val matrix = Matrix().apply {
             postRotate(angle)
             postScale(scale, scale)  // Scale down the bitmap
@@ -657,7 +682,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         info.append("Longitude: ").append(data.longitude).append("\n")
         data.heading?.let { info.append("Heading: ").append(it).append("\n") }
         data.altitude?.let { info.append("Altitude: ").append(it).append("\n") }
-        // Append other data fields as needed
+        data.mounting?.let { info.append("Mounting: ").append(it).append("\n") }
+        data.speed?.let { info.append("Speed: ").append(it).append("\n") }
+        data.distance?.let { info.append("Distance: ").append(it).append("\n") }
+        data.quality?.let { info.append("Quality: ").append(it).append("\n") }
+        data.qualityHeading?.let { info.append("Quality Heading: ").append(it).append("\n") }
+        data.outdoor?.let { info.append("Outdoor: ").append(it).append("\n") }
 
         infoContent.text = info.toString()
     }
