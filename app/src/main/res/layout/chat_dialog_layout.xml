@@ -39,4 +39,14 @@
         android:text="michmall@iti.gr"
         android:textColor="@android:color/holo_blue_dark" />
 
+    <TextView
+        android:id="@+id/tvLine5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Version:1.0" />
+    <TextView
+        android:id="@+id/tvLine6"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Build date: 16/04/2024" />
 </LinearLayout>

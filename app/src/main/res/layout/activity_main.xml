@@ -160,6 +160,7 @@
         android:onClick="showRemoteDialog"
         android:text="Send POS"
         android:textColor="#000000"
+        android:visibility="invisible"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 

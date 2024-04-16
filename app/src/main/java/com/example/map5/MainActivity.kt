@@ -65,7 +65,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
     private var isDebugInfoVisible = false
     private var latestDebugMessage: String = ""
     private var latestFusionDebugMessage: String = ""
-
+    private var previousDebugMessage: String = ""
+    private var previousFusionDebugMessage: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -141,7 +142,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
         val remoteButton: Button = findViewById(R.id.remoteButton)
 
         remoteButton.setOnClickListener {
-            val items = arrayOf("1", "2", "3")
+            val items = arrayOf("1", "2", "3", "START")
 
             val builder = AlertDialog.Builder(this)
             builder.setTitle("Choose QR Code")
@@ -186,9 +187,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
                 val debugTextView: TextView = findViewById(R.id.debugTextView)
                 val fusionDebugTextView: TextView =
                     findViewById(R.id.fusionDebugTextView) // Reference to the fusion debug TextView
-                debugTextView.text = latestDebugMessage
-                fusionDebugTextView.text =
-                    latestFusionDebugMessage // Update the fusion debug TextView
+                debugTextView.text = ""
+                fusionDebugTextView.text = ""
             } else {
                 debugInfoContainer.visibility = View.GONE
                 fusionDebugInfoContainer.visibility =
@@ -501,29 +501,39 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
 
     private fun handleDebugMessage(debugMessage: String) {
         val consoleMessage = extractConsoleMessage(debugMessage)
-        latestDebugMessage = consoleMessage // Store the latest message
+        previousDebugMessage = latestDebugMessage  // Store the last message as previous
+        latestDebugMessage = consoleMessage  // Update the latest message
         Log.d("Debug_Topic_Message", "Received debug message: $consoleMessage")
         runOnUiThread {
             val debugTextView: TextView = findViewById(R.id.debugTextView)
-            debugTextView.text = consoleMessage
+            debugTextView.text = "Latest: $latestDebugMessage\nPrevious: $previousDebugMessage"
         }
     }
 
     private fun handleFusionDebugMessage(debugMessage: String) {
         val consoleMessage = extractConsoleMessage(debugMessage)
-        latestFusionDebugMessage = consoleMessage // Store the latest fusion debug message
+        previousFusionDebugMessage = latestFusionDebugMessage  // Store the last message as previous
+        latestFusionDebugMessage = consoleMessage  // Update the latest message
         Log.d("Fusion_Debug_Topic_Message", "Received fusion debug message: $consoleMessage")
-
         runOnUiThread {
             val fusionDebugTextView: TextView = findViewById(R.id.fusionDebugTextView)
-            fusionDebugTextView.text = consoleMessage
+            fusionDebugTextView.text = "Latest: $latestFusionDebugMessage\nPrevious: $previousFusionDebugMessage"
         }
     }
+
 
     private fun extractConsoleMessage(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            jsonObject.optString("console", "No message") // Default message if key not found
+            val messageSourceId = jsonObject.optString("sourceID", "")
+            val storedSourceId = sharedPreferences.getString("sourceId", "")
+
+            if (messageSourceId == storedSourceId) {
+                jsonObject.optString("console", "No message") // Return console message if sourceID matches
+            } else {
+                "Message from different sourceID. Please disconnect and connect to $messageSourceId to show the debug messages!" // Or handle it differently
+
+            }
         } catch (e: JSONException) {
             "Invalid JSON"
         }
@@ -706,8 +716,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback,GoogleMap.OnMarkerC
             R.id.button, R.id.switch1, R.id.switch2, R.id.switch3,
             R.id.switch4, R.id.focusLastMarkerButton, R.id.remoteButton,
             R.id.infoButton, R.id.clearButton, R.id.connectionIndicator,
-            R.id.showDebugInfoButton, R.id.mapTypeButton, R.id.posButton,
-            R.id.button
+            R.id.showDebugInfoButton, R.id.mapTypeButton, R.id.button
         )
 
         areButtonsVisible = !areButtonsVisible
